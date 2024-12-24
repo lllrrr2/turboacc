@@ -10,26 +10,22 @@ on:
               - '!.github/**'
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 8
       matrix:
-        tag_branche: [master-k6.6,master-k6.1,openwrt-23.05,openwrt-22.03]
+        tag_branche: [master,openwrt-24.10,openwrt-23.05,openwrt-22.03]
         compile: [FLOW_OFFLOAD,SHORTCUT_FE,SHORTCUT_FE_CM,SHORTCUT_FE_DRV]
-        exclude:
-          - tag_branche: master-5.15
-            compile: SHORTCUT_FE_DRV
-          #master分支没有可用支持SHORTCUT_FE_DRV的5.15内核架构
     steps:
           - name: 将存储库签出到运行器
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
                 ref: 'luci'
                 path: luci-app-turboacc
 
           - name: 将存储库签出到运行器
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
                 ref: 'package'
                 path: turboacc
@@ -65,14 +61,9 @@ jobs:
     
           - name: 切换标签/分支
             run: |
-              if [ "${{ matrix.tag_branche }}" = "master-k6.1" ] || [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                tag_branche=master
-              else
-                tag_branche=${{ matrix.tag_branche }}
-              fi
-              echo "$tag_branche"
+              echo "${{ matrix.tag_branche }}"
               cd $OPENWRT_ROOT_PATH
-              git checkout $tag_branche
+              git checkout "${{ matrix.tag_branche }}"
     
           - name: 修复问题
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
@@ -90,12 +81,7 @@ jobs:
           - name: 生成配置文件
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
-              if [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                echo "CONFIG_TARGET_x86=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TARGET_x86_64=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_LINUX_6_6=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TESTING_KERNEL=y" >> $OPENWRT_ROOT_PATH/.config
-              elif [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
+              if [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
                 echo "CONFIG_TARGET_ipq807x=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic_DEVICE_redmi_ax6=y" >> $OPENWRT_ROOT_PATH/.config
@@ -109,7 +95,11 @@ jobs:
           - name: 添加turboacc
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
-              curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
+              if [ "${{ matrix.compile }}" = "FLOW_OFFLOAD" ]; then
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --no-sfe
+              else
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
+              fi
               kernel_version="$(sed -n '/CONFIG_LINUX_/p' $OPENWRT_ROOT_PATH/.config | sed -e 's/CONFIG_LINUX_//' -e 's/=y//' -e 's/_/./g')"
               #log
               echo "libnftnl-file"
@@ -135,11 +125,7 @@ jobs:
               echo "compile = "${{ matrix.compile }}
               rm -rf .config .config.old tmp
               ls -la
-              if [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                echo "CONFIG_TARGET_mediatek=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_LINUX_6_6=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TESTING_KERNEL=y" >> $OPENWRT_ROOT_PATH/.config
-              elif [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
+              if [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
                 echo "CONFIG_TARGET_ipq807x=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic_DEVICE_redmi_ax6=y" >> $OPENWRT_ROOT_PATH/.config
@@ -206,9 +192,31 @@ jobs:
     #          tar xf toolchain.tar.xz
     #          cp -r ./openwrt-toolchain-*/toolchain-* .
     #          rm -rf ./openwrt-toolchain-*
-              
+
+    
+          - name: 获取信息
+            working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            id: get-info
+            run: |
+              toolchain_commit=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
+              target=$(sed -n '/^CONFIG_TARGET_BOARD/p' ${{ env.OPENWRT_ROOT_PATH }}/.config | sed -e 's/CONFIG_TARGET_BOARD\=\"//' -e 's/\"//')
+              subtarget=$(sed -n '/^CONFIG_TARGET_SUBTARGET/p' ${{ env.OPENWRT_ROOT_PATH }}/.config | sed -e 's/CONFIG_TARGET_SUBTARGET\=\"//' -e 's/\"//')
+              echo "target=$target" >> "$GITHUB_OUTPUT"
+              echo "subtarget=$subtarget" >> "$GITHUB_OUTPUT"
+              echo "toolchain_commit=$toolchain_commit" >> "$GITHUB_OUTPUT"
+
+          - name: 缓存toolchain
+            uses: actions/cache@v4
+            id: cache-toolchain
+            with:
+              path: |
+                ${{ env.OPENWRT_ROOT_PATH }}/staging_dir/host*
+                ${{ env.OPENWRT_ROOT_PATH }}/staging_dir/tool*
+              key: toolchain-${{ steps.get-info.outputs.toolchain_commit }}-${{ steps.get-info.outputs.target }}-${{ steps.get-info.outputs.subtarget }}
+
           - name: 构建工具
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
             run: |
               make tools/install -j $(($(nproc)+1)) || make tools/install -j1 V=s
               echo "======================="
@@ -219,6 +227,7 @@ jobs:
       
           - name: 构建工具链
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
             run: |
               make toolchain/install -j $(($(nproc)+1)) || make toolchain/install -j1 V=s
               echo "======================="
@@ -255,11 +264,12 @@ jobs:
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
               mkdir -p ./artifact
-              cp -rf $(find ./bin/packages/ -type f -name "*.ipk") ./artifact
-              cp -rf $(find ./bin/targets/ -type f -name "*.ipk") ./artifact
+              ls -la $(find ./bin/packages/ -type d)
+              cp -rf $(find ./bin/packages/ -type f \( -name "*.ipk" -o -name "*.apk" \)) ./artifact
+              cp -rf $(find ./bin/packages/ -type f \( -name "*.ipk" -o -name "*.apk" \)) ./artifact
     
           - name: 上传build artifacts
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: packages-${{ matrix.tag_branche }}-${{ matrix.compile }}
               path: ${{ env.OPENWRT_ROOT_PATH }}/artifact/**
@@ -278,7 +288,7 @@ jobs:
     
           - name: 上传日志
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: logs-${{ matrix.tag_branche }}-${{ matrix.compile }}
               path: "${{ env.LOG_PATH }}"

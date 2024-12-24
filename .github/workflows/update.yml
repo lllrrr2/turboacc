@@ -15,12 +15,12 @@ jobs:
     check:
         outputs:
             test: ${{ steps.diff.outputs.test }}
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-latest
         steps:
         - name: 设置时区建立工作文件夹
           run: |
             sudo timedatectl set-timezone "Asia/Shanghai"
-            mkdir -p compare compare/original compare/new clone clone/fullcone-nat-nftables/nft-fullcone clone/wongsyrone/lede-1 clone/coolsnowwolf/lede output/test output/push
+            mkdir -p compare compare/original compare/new clone clone/fullcone-nat-nftables/nft-fullcone clone/coolsnowwolf/lede output/test output/push
             export COMPARE_PATH="$(pwd)/compare"
             export CLONE_PATH="$(pwd)/clone"
             export OUTPUT_PATH="$(pwd)/output"
@@ -35,7 +35,6 @@ jobs:
         - name: 克隆
           run: |
             git clone --depth=1 --single-branch https://github.com/fullcone-nat-nftables/nft-fullcone $CLONE_PATH/fullcone-nat-nftables/nft-fullcone
-            git clone --depth=1 --single-branch https://github.com/wongsyrone/lede-1 $CLONE_PATH/wongsyrone/lede-1
             git clone --depth=1 --single-branch https://github.com/coolsnowwolf/lede $CLONE_PATH/coolsnowwolf/lede
             git clone --depth=1 --single-branch --branch "package" https://github.com/chenmozhijin/turboacc $CLONE_PATH/chenmozhijin/turboacc
             git clone --depth=1 --single-branch --branch "master" https://github.com/openwrt/openwrt/ $CLONE_PATH/openwrt/openwrt/
@@ -57,7 +56,9 @@ jobs:
             cp $CLONE_PATH/chenmozhijin/turboacc/hack-6.1/952-add-net-conntrack-events-support-multiple-registrant.patch $COMPARE_PATH/new/hack-6.1/952-add-net-conntrack-events-support-multiple-registrant.patch
             # coolsnowwolf/lede#11211
             cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/hack-6.1/953-net-patch-linux-kernel-to-support-shortcut-fe.patch $COMPARE_PATH/new/hack-6.1/953-net-patch-linux-kernel-to-support-shortcut-fe.patch
-            cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch $COMPARE_PATH/new/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch
+            #cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch $COMPARE_PATH/new/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch
+            cp $CLONE_PATH/chenmozhijin/turboacc/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch $COMPARE_PATH/new/hack-6.6/952-add-net-conntrack-events-support-multiple-registrant.patch
+            # coolsnowwolf/lede#11211
             cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/hack-6.6/953-net-patch-linux-kernel-to-support-shortcut-fe.patch $COMPARE_PATH/new/hack-6.6/953-net-patch-linux-kernel-to-support-shortcut-fe.patch
             cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/pending-5.10/613-netfilter_optional_tcp_window_check.patch $COMPARE_PATH/new/pending-5.10/613-netfilter_optional_tcp_window_check.patch
             cp $CLONE_PATH/coolsnowwolf/lede/target/linux/generic/pending-5.15/613-netfilter_optional_tcp_window_check.patch $COMPARE_PATH/new/pending-5.15/613-netfilter_optional_tcp_window_check.patch
@@ -77,16 +78,20 @@ jobs:
             cp $CLONE_PATH/chenmozhijin/turboacc/pending-6.1/613-netfilter_optional_tcp_window_check.patch $COMPARE_PATH/original/pending-6.1/613-netfilter_optional_tcp_window_check.patch
             cp $CLONE_PATH/chenmozhijin/turboacc/pending-6.6/613-netfilter_optional_tcp_window_check.patch $COMPARE_PATH/original/pending-6.6/613-netfilter_optional_tcp_window_check.patch || true
             #shortcut-fe
-            cp -RT $CLONE_PATH/coolsnowwolf/lede/package/qca/shortcut-fe $COMPARE_PATH/new/shortcut-fe
+            #cp -RT $CLONE_PATH/coolsnowwolf/lede/package/qca/shortcut-fe $COMPARE_PATH/new/shortcut-fe
+            cp -RT $CLONE_PATH/chenmozhijin/turboacc/shortcut-fe $COMPARE_PATH/new/shortcut-fe
             cp -RT $CLONE_PATH/chenmozhijin/turboacc/shortcut-fe $COMPARE_PATH/original/shortcut-fe
             sed -i "s#DEPENDS:=@TARGET_ipq806x||TARGET_ipq807x +kmod-shortcut-fe#DEPENDS:=@TARGET_ipq806x||TARGET_ipq807x||TARGET_qualcommax +kmod-shortcut-fe#g" $COMPARE_PATH/new/shortcut-fe/simulated-driver/Makefile
             #firewall4 nftables libnftnl
             cp -RT $CLONE_PATH/openwrt/openwrt/package/network/config/firewall4/ $COMPARE_PATH/new/firewall4/
             cp -RT $CLONE_PATH/openwrt/openwrt/package/network/utils/nftables/ $COMPARE_PATH/new/nftables/
             cp -RT $CLONE_PATH/openwrt/openwrt/package/libs/libnftnl/ $COMPARE_PATH/new/libnftnl/
-            cp -RT $CLONE_PATH/wongsyrone/lede-1/package/network/config/firewall4/patches/ $COMPARE_PATH/new/firewall4/patches/
-            cp -RT $CLONE_PATH/wongsyrone/lede-1/package/network/utils/nftables/patches/ $COMPARE_PATH/new/nftables/patches/
-            cp -RT $CLONE_PATH/wongsyrone/lede-1/package/libs/libnftnl/patches/ $COMPARE_PATH/new/libnftnl/patches/
+            FIREWALL4_VERSION=$(grep -o 'FIREWALL4_VERSION=.*' "$CLONE_PATH/chenmozhijin/turboacc/version" | cut -d '=' -f 2)
+            LIBNFTNL_VERSION=$(grep -o 'LIBNFTNL_VERSION=.*' "$CLONE_PATH/chenmozhijin/turboacc/version" | cut -d '=' -f 2)
+            NFTABLES_VERSION=$(grep -o 'NFTABLES_VERSION=.*' "$CLONE_PATH/chenmozhijin/turboacc/version" | cut -d '=' -f 2)
+            cp -RT $CLONE_PATH/chenmozhijin/turboacc/firewall4-$FIREWALL4_VERSION/firewall4/patches/ $COMPARE_PATH/new/firewall4/patches/
+            cp -RT $CLONE_PATH/chenmozhijin/turboacc/nftables-$NFTABLES_VERSION/nftables/patches/ $COMPARE_PATH/new/nftables/patches/
+            cp -RT $CLONE_PATH/chenmozhijin/turboacc/libnftnl-$LIBNFTNL_VERSION/libnftnl/patches/ $COMPARE_PATH/new/libnftnl/patches/
             FIREWALL4_NEW_VERSION=$(grep -o 'PKG_SOURCE_VERSION:=.*' $COMPARE_PATH/new/firewall4/Makefile | cut -d '=' -f 2)
             NFTABLES_NEW_VERSION=$(grep -o 'PKG_VERSION:=.*' $COMPARE_PATH/new/nftables/Makefile | cut -d '=' -f 2)
             LIBNFTNL_NEW_VERSION=$(grep -o 'PKG_VERSION:=.*' $COMPARE_PATH/new/libnftnl/Makefile | cut -d '=' -f 2)
@@ -161,7 +166,7 @@ jobs:
             tar cvpzf $GITHUB_WORKSPACE/new.tgz *
 
         - name: 上传 文件
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4
           with:
             name: new
             path: new.tgz
@@ -174,16 +179,12 @@ jobs:
             fail-fast: false
             max-parallel: 10
             matrix:
-              tag_branche: [master-k6.6,master-k6.1,openwrt-23.05,openwrt-22.03]
+              tag_branche: [master,openwrt-24.10,openwrt-23.05,openwrt-22.03]
               compile: [FLOW_OFFLOAD,SHORTCUT_FE,SHORTCUT_FE_CM,SHORTCUT_FE_DRV]
-              exclude:
-                - tag_branche: master-k5.15
-                  compile: SHORTCUT_FE_DRV
-                #master分支没有可用支持SHORTCUT_FE_DRV的5.15内核架构
         runs-on: ubuntu-22.04
         steps:
           - name: 下载new
-            uses: actions/download-artifact@v3
+            uses: actions/download-artifact@v4
             with:
                 name: new
 
@@ -218,14 +219,9 @@ jobs:
     
           - name: 切换标签/分支
             run: |
-              if [ "${{ matrix.tag_branche }}" = "master-k6.1" ] || [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                tag_branche=master
-              else
-                tag_branche=${{ matrix.tag_branche }}
-              fi
-              echo "$tag_branche"
+              echo "${{ matrix.tag_branche }}"
               cd $OPENWRT_ROOT_PATH
-              git checkout $tag_branche
+              git checkout "${{ matrix.tag_branche }}"
     
           - name: 修复问题
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
@@ -243,12 +239,7 @@ jobs:
           - name: 生成配置文件
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
-              if [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                echo "CONFIG_TARGET_x86=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TARGET_x86_64=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_LINUX_6_6=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TESTING_KERNEL=y" >> $OPENWRT_ROOT_PATH/.config
-              elif [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
+              if [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
                 echo "CONFIG_TARGET_ipq807x=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic_DEVICE_redmi_ax6=y" >> $OPENWRT_ROOT_PATH/.config
@@ -262,7 +253,11 @@ jobs:
           - name: 添加turboacc
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
-              curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh update ${{ env.TURBOACC_PATH }}
+              if [ "${{ matrix.compile }}" = "FLOW_OFFLOAD" ]; then
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --no-sfe --local-pkg $TURBOACC_PATH
+              else
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --local-pkg $TURBOACC_PATH
+              fi
               kernel_version="$(sed -n '/CONFIG_LINUX_/p' $OPENWRT_ROOT_PATH/.config | sed -e 's/CONFIG_LINUX_//' -e 's/=y//' -e 's/_/./g')"
               #log
               echo "libnftnl-file"
@@ -288,11 +283,7 @@ jobs:
               echo "compile = "${{ matrix.compile }}
               rm -rf .config .config.old tmp
               ls -la
-              if [ "${{ matrix.tag_branche }}" = "master-k6.6" ]; then
-                echo "CONFIG_TARGET_mediatek=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_LINUX_6_6=y" >> $OPENWRT_ROOT_PATH/.config
-                echo "CONFIG_TESTING_KERNEL=y" >> $OPENWRT_ROOT_PATH/.config
-              elif [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
+              if [ "${{ matrix.compile }}" = "SHORTCUT_FE_DRV" ]; then
                 echo "CONFIG_TARGET_ipq807x=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic=y" >> $OPENWRT_ROOT_PATH/.config
                 echo "CONFIG_TARGET_ipq807x_generic_DEVICE_redmi_ax6=y" >> $OPENWRT_ROOT_PATH/.config
@@ -359,9 +350,30 @@ jobs:
     #          tar xf toolchain.tar.xz
     #          cp -r ./openwrt-toolchain-*/toolchain-* .
     #          rm -rf ./openwrt-toolchain-*
+
+          - name: 获取信息
+            working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            id: get-info
+            run: |
+              toolchain_commit=$(git log --pretty=tformat:"%h" -n1 tools toolchain)
+              target=$(sed -n '/^CONFIG_TARGET_BOARD/p' ${{ env.OPENWRT_ROOT_PATH }}/.config | sed -e 's/CONFIG_TARGET_BOARD\=\"//' -e 's/\"//')
+              subtarget=$(sed -n '/^CONFIG_TARGET_SUBTARGET/p' ${{ env.OPENWRT_ROOT_PATH }}/.config | sed -e 's/CONFIG_TARGET_SUBTARGET\=\"//' -e 's/\"//')
+              echo "target=$target" >> "$GITHUB_OUTPUT"
+              echo "subtarget=$subtarget" >> "$GITHUB_OUTPUT"
+              echo "toolchain_commit=$toolchain_commit" >> "$GITHUB_OUTPUT"
+
+          - name: 缓存toolchain
+            uses: actions/cache@v4
+            id: cache-toolchain
+            with:
+              path: |
+                ${{ env.OPENWRT_ROOT_PATH }}/staging_dir/host*
+                ${{ env.OPENWRT_ROOT_PATH }}/staging_dir/tool*
+              key: toolchain-${{ steps.get-info.outputs.toolchain_commit }}-${{ steps.get-info.outputs.target }}-${{ steps.get-info.outputs.subtarget }}
               
           - name: 构建工具
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
             run: |
               make tools/install -j $(($(nproc)+1)) || make tools/install -j1 V=s
               echo "======================="
@@ -372,6 +384,7 @@ jobs:
       
           - name: 构建工具链
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
+            if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
             run: |
               make toolchain/install -j $(($(nproc)+1)) || make toolchain/install -j1 V=s
               echo "======================="
@@ -408,11 +421,12 @@ jobs:
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
               mkdir -p ./artifact
-              cp -rf $(find ./bin/packages/ -type f -name "*.ipk") ./artifact
-              cp -rf $(find ./bin/targets/ -type f -name "*.ipk") ./artifact
+              ls -la $(find ./bin/packages/ -type d)
+              cp -rf $(find ./bin/packages/ -type f \( -name "*.ipk" -o -name "*.apk" \)) ./artifact
+              cp -rf $(find ./bin/packages/ -type f \( -name "*.ipk" -o -name "*.apk" \)) ./artifact
     
           - name: 上传build artifacts
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: packages-${{ matrix.tag_branche }}-${{ matrix.compile }}
               path: ${{ env.OPENWRT_ROOT_PATH }}/artifact/**
@@ -431,7 +445,7 @@ jobs:
     
           - name: 上传日志
             if: success() || failure()
-            uses: actions/upload-artifact@v3
+            uses: actions/upload-artifact@v4
             with:
               name: logs-${{ matrix.tag_branche }}-${{ matrix.compile }}
               path: "${{ env.LOG_PATH }}"
@@ -442,13 +456,13 @@ jobs:
         runs-on: ubuntu-22.04
         steps:
           - name: 将存储库签出到运行器
-            uses: actions/checkout@v3
+            uses: actions/checkout@v4
             with:
                 ref: 'package'
                 path: upload
 
           - name: 下载new
-            uses: actions/download-artifact@v3
+            uses: actions/download-artifact@v4
             with:
                 name: new
 
