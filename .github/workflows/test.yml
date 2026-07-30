@@ -8,6 +8,8 @@ on:
             paths:
               - '!README.md'
               - '!.github/**'
+env:
+  TZ: Asia/Shanghai
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -50,7 +52,6 @@ jobs:
               sudo -E systemctl daemon-reload 
               sudo -E apt -y autoremove --purge
               sudo -E apt clean
-              sudo timedatectl set-timezone "Asia/Shanghai"
     
           - name: 克隆源代码
             run: |
@@ -96,9 +97,9 @@ jobs:
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             run: |
               if [ "${{ matrix.compile }}" = "FLOW_OFFLOAD" ]; then
-                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --no-sfe
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --no-sfe --local-pkg $TURBOACC_PATH
               else
-                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
+                curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --local-pkg $TURBOACC_PATH
               fi
               kernel_version="$(sed -n '/CONFIG_LINUX_/p' $OPENWRT_ROOT_PATH/.config | sed -e 's/CONFIG_LINUX_//' -e 's/=y//' -e 's/_/./g')"
               #log
@@ -229,6 +230,7 @@ jobs:
             working-directory: ${{ env.OPENWRT_ROOT_PATH }}
             if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
             run: |
+              make toolchain/kernel-headers/compile V=s
               make toolchain/install -j $(($(nproc)+1)) || make toolchain/install -j1 V=s
               echo "======================="
               echo "空间使用情况:"
@@ -274,21 +276,21 @@ jobs:
               name: packages-${{ matrix.tag_branche }}-${{ matrix.compile }}
               path: ${{ env.OPENWRT_ROOT_PATH }}/artifact/**
     
-          - name: 收集日志
-            if: success() || failure()
+          - name: 收集调试信息
+            if: always()
+            env:
+              JOB_STATUS: ${{ job.status }}
+              MATRIX_TAG_BRANCHE: ${{ matrix.tag_branche }}
+              MATRIX_COMPILE: ${{ matrix.compile }}
+              DEBUG_OUTPUT_PATH: ${{ github.workspace }}/openwrt-debug
             run: |
-              mkdir -p logs
-              cd logs
-              export LOG_PATH="$(pwd)"
-              echo "LOG_PATH=$LOG_PATH" >> $GITHUB_ENV
-              cp -r $OPENWRT_ROOT_PATH/logs $LOG_PATH/openwrt-logs || echo "没有openwrt/logs"
-              cp $OPENWRT_ROOT_PATH/.config $LOG_PATH/openwrt.config || echo "没有openwrt/.config"
-              ls -la $(find $OPENWRT_ROOT_PATH/package/ -type d)  >> $LOG_PATH/package_files.list
-              ls -la $(find $OPENWRT_ROOT_PATH/linux/generic/ -type d)  >> $LOG_PATH/kp_files.list
+              bash "${{ github.workspace }}/luci-app-turboacc/.github/scripts/collect-openwrt-debug.sh"
     
-          - name: 上传日志
-            if: success() || failure()
+          - name: 上传调试信息
+            if: always()
             uses: actions/upload-artifact@v4
             with:
-              name: logs-${{ matrix.tag_branche }}-${{ matrix.compile }}
-              path: "${{ env.LOG_PATH }}"
+              name: debug-${{ matrix.tag_branche }}-${{ matrix.compile }}
+              path: ${{ github.workspace }}/openwrt-debug
+              if-no-files-found: warn
+              retention-days: 14
